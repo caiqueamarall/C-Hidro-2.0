@@ -1,0 +1,340 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Santarém - Gráfico de Anomalias (A partir de 2005)</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+  <style>
+    body { font-family: sans-serif; margin: 20px; color: #333; background: #f8fafc; }
+    h1 { color: #0f172a; margin-bottom: 5px; }
+    h3 { color: #64748b; margin-top: 0; font-weight: normal; }
+    .note { background: #fff3cd; padding: 10px; border-left: 4px solid #ffc107; margin-bottom: 20px; border-radius: 4px; }
+    #chartContainer { width: 100%; height: 600px; background: #fff; border-radius: 8px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1); padding: 20px; box-sizing: border-box; display: none; margin-top: 20px; }
+  </style>
+</head>
+<body>
+  <h1>Santarém</h1>
+  <h3>Rio Tapajós • Código: 17900000 (Série iniciada em 2005)</h3>
+  
+  <p id="status" style="font-weight: bold; color: #d32f2f;">Carregando dados e desenhando o gráfico...</p>
+  
+  <div id="chartContainer"></div>
+
+  <script>
+    async function loadData() {
+      try {
+        const response = await fetch('/Rios/Rio Tapajós/Santarém (17900000)/serie_historica.csv');
+        if (!response.ok) throw new Error('Arquivo não encontrado no servidor Vite.');
+        const csvText = await response.text();
+        
+        Papa.parse(csvText, {
+          header: true,
+          skipEmptyLines: true,
+          complete: function(results) {
+            processData(results.data);
+          }
+        });
+      } catch (e) {
+        document.getElementById('status').innerText = 'Erro ao carregar CSV: ' + e.message;
+      }
+    }
+
+    function processData(data) {
+      const dailyData = {};
+      let totalFilteredRecords = 0;
+      
+      const data2026 = [];
+      
+      // 1. Group by absolute date first (like generate_statistics.py)
+      data.forEach(row => {
+        const dateStr = row['Data'];
+        const cotaStr = row['Cota'];
+        if (dateStr && cotaStr) {
+          const cota = parseFloat(cotaStr);
+          if (!isNaN(cota)) {
+            let y = '', m = '', d = '';
+            const parts = dateStr.split(/[-/]/);
+            if (parts[0].length === 4) {
+              y = parts[0]; m = parts[1]; d = parts[2];
+            } else {
+              d = parts[0]; m = parts[1]; y = parts[2];
+            }
+            
+            if (parseInt(y) >= 2005) {
+              const dtStr = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+              if (!dailyData[dtStr]) dailyData[dtStr] = [];
+              dailyData[dtStr].push(cota);
+              
+              if (y === '2026') {
+                 const mappedDateStr = (m === '02' && d === '29') ? '2024-02-29' : `2024-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+                 data2026.push([mappedDateStr, cota]);
+              }
+              
+              totalFilteredRecords++;
+            }
+          }
+        }
+      });
+      
+      // 2. Compute average for each absolute day (if duplicates)
+      const dailyAverages = {};
+      for (const dt in dailyData) {
+        const sum = dailyData[dt].reduce((a, b) => a + b, 0);
+        dailyAverages[dt] = sum / dailyData[dt].length;
+      }
+      
+      // 3. Group by month (1 to 12) collecting all daily averages
+      const monthlyAverages = {};
+      for (let i = 1; i <= 12; i++) {
+        monthlyAverages[i.toString().padStart(2, '0')] = [];
+      }
+      
+      for (const dt in dailyAverages) {
+        const m = dt.split('-')[1];
+        if (monthlyAverages[m]) {
+          monthlyAverages[m].push(dailyAverages[dt]);
+        }
+      }
+      
+      // 4. Calculate Mean and Population Standard Deviation for each month
+      const stats = [];
+      const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+      
+      for (let i = 1; i <= 12; i++) {
+        const mStr = i.toString().padStart(2, '0');
+        const vals = monthlyAverages[mStr];
+        
+        if (vals.length === 0) continue;
+        
+        const sum = vals.reduce((a, b) => a + b, 0);
+        const mean = sum / vals.length;
+        
+        // Population standard deviation (divide by N), to match generate_statistics.py
+        let varianceSum = 0;
+        for (const v of vals) {
+          varianceSum += Math.pow(v - mean, 2);
+        }
+        const stdDev = Math.sqrt(varianceSum / vals.length);
+        
+        stats.push({
+           monthName: monthNames[i-1],
+           media: mean,
+           desvio_padrao: stdDev,
+           dp_pos_1: mean + stdDev,
+           dp_pos_1_5: mean + 1.5 * stdDev,
+           dp_pos_2: mean + 2 * stdDev,
+           dp_pos_3: mean + 3 * stdDev,
+           dp_neg_1: mean - stdDev,
+           dp_neg_1_5: mean - 1.5 * stdDev,
+           dp_neg_2: mean - 2 * stdDev,
+           dp_neg_3: mean - 3 * stdDev
+        });
+      }
+      
+      document.getElementById('status').style.display = 'none';
+      document.getElementById('chartContainer').style.display = 'block';
+      
+      drawChart(stats, data2026);
+    }
+    
+    function drawChart(stats, data2026) {
+      // Create stepped points: place each month's value at the 1st of the month
+      const stepStats = [];
+      for (let i = 0; i < 12; i++) {
+        const mm = String(i + 1).padStart(2, '0');
+        stepStats.push({ ...stats[i], date: `2024-${mm}-01` });
+      }
+      stepStats.push({ ...stats[11], date: '2024-12-31' });
+
+      // Create extended points for the smooth average curve (15th of month)
+      const extendedStats = [];
+      extendedStats.push({ ...stats[0], date: '2024-01-01' });
+      for (let i = 0; i < 12; i++) {
+        const mm = String(i + 1).padStart(2, '0');
+        extendedStats.push({ ...stats[i], date: `2024-${mm}-15` });
+      }
+      extendedStats.push({ ...stats[11], date: '2024-12-31' });
+
+      const chartDom = document.getElementById('chartContainer');
+      const myChart = echarts.init(chartDom);
+      
+      const option = {
+        grid: { top: 80, right: 20, bottom: 90, left: 50, containLabel: true },
+        dataZoom: [
+          { type: 'inside', start: 0, end: 100 },
+          {
+            type: 'slider',
+            start: 0,
+            end: 100,
+            height: 30,
+            bottom: 20,
+            borderColor: 'transparent',
+            backgroundColor: 'rgba(241, 245, 249, 0.8)',
+            fillerColor: 'rgba(2, 132, 199, 0.15)',
+            handleStyle: { color: '#0284c7', borderColor: '#0284c7' }
+          }
+        ],
+        tooltip: {
+          trigger: 'axis',
+          formatter: function (params) {
+             let html = `<div style="font-family:sans-serif;font-size:12px;">`;
+             const dateStr = params[0].axisValueLabel || params[0].axisValue;
+             html += `<div style="font-weight:bold;margin-bottom:8px;color:#374151;">${dateStr}</div>`;
+             
+             params.forEach(p => {
+                if (p.seriesName === 'Ano Corrente (2026)') {
+                   html += `<div style="color:#0ea5e9;font-weight:bold;">${p.seriesName}: ${p.value[1].toFixed(1)} cm</div>`;
+                }
+             });
+             
+             const mediaParam = params.find(p => p.seriesName === 'Média Histórica');
+             if (mediaParam) {
+                html += `<div style="color:#9CA3AF;font-weight:bold;margin-top:4px">Média Histórica: ${mediaParam.value[1].toFixed(1)} cm</div>`;
+             }
+             
+             html += `</div>`;
+             return html;
+          }
+        },
+        legend: {
+          type: 'scroll',
+          data: [
+            'Ano Corrente (2026)',
+            'Média Histórica', 
+            'Anomalia Extrema (+)', 'Anomalia Severa (+)', 'Anomalia Moderada (+)', 'Anomalia Leve (+)',
+            'Anomalia Leve (-)', 'Anomalia Moderada (-)', 'Anomalia Severa (-)', 'Anomalia Extrema (-)'
+          ],
+          top: 0,
+          width: '90%',
+          textStyle: { color: '#64748B' }
+        },
+        xAxis: {
+          type: 'time',
+          axisLine: { lineStyle: { color: '#CBD5E1' } },
+          axisLabel: { color: '#64748B', formatter: '{MMM}' },
+          splitLine: { show: false },
+          min: '2024-01-01',
+          max: '2024-12-31'
+        },
+        yAxis: {
+          type: 'value',
+          name: 'Cota (cm)',
+          nameTextStyle: { color: '#64748B', padding: [0, 0, 0, 10] },
+          axisLine: { show: true, lineStyle: { color: '#CBD5E1' } },
+          splitLine: { lineStyle: { color: '#F1F5F9' } },
+          axisLabel: { color: '#64748B' },
+          scale: true
+        },
+        series: [
+          {
+            name: 'Anomalia Leve (+)',
+            type: 'line',
+            step: 'end',
+            data: stepStats.map(s => [s.date, s.dp_pos_1]),
+            itemStyle: { color: 'rgba(186, 230, 253, 1)' },
+            lineStyle: { width: 1 },
+            areaStyle: { origin: 'end', color: 'rgba(186, 230, 253, 0.25)' },
+            symbol: 'none'
+          },
+          {
+            name: 'Anomalia Moderada (+)',
+            type: 'line',
+            step: 'end',
+            data: stepStats.map(s => [s.date, s.dp_pos_1_5]),
+            itemStyle: { color: 'rgba(125, 211, 252, 1)' },
+            lineStyle: { width: 1 },
+            areaStyle: { origin: 'end', color: 'rgba(125, 211, 252, 0.25)' },
+            symbol: 'none'
+          },
+          {
+            name: 'Anomalia Severa (+)',
+            type: 'line',
+            step: 'end',
+            data: stepStats.map(s => [s.date, s.dp_pos_2]),
+            itemStyle: { color: 'rgba(56, 189, 248, 1)' },
+            lineStyle: { width: 1 },
+            areaStyle: { origin: 'end', color: 'rgba(56, 189, 248, 0.25)' },
+            symbol: 'none'
+          },
+          {
+            name: 'Anomalia Extrema (+)',
+            type: 'line',
+            step: 'end',
+            data: stepStats.map(s => [s.date, s.dp_pos_3]),
+            itemStyle: { color: 'rgba(2, 132, 199, 1)' },
+            lineStyle: { width: 1 },
+            areaStyle: { origin: 'end', color: 'rgba(2, 132, 199, 0.25)' },
+            symbol: 'none'
+          },
+          {
+            name: 'Anomalia Leve (-)',
+            type: 'line',
+            step: 'end',
+            data: stepStats.map(s => [s.date, s.dp_neg_1]),
+            itemStyle: { color: 'rgba(254, 202, 202, 1)' },
+            lineStyle: { width: 1 },
+            areaStyle: { origin: 'start', color: 'rgba(254, 202, 202, 0.25)' },
+            symbol: 'none'
+          },
+          {
+            name: 'Anomalia Moderada (-)',
+            type: 'line',
+            step: 'end',
+            data: stepStats.map(s => [s.date, s.dp_neg_1_5]),
+            itemStyle: { color: 'rgba(252, 165, 165, 1)' },
+            lineStyle: { width: 1 },
+            areaStyle: { origin: 'start', color: 'rgba(252, 165, 165, 0.25)' },
+            symbol: 'none'
+          },
+          {
+            name: 'Anomalia Severa (-)',
+            type: 'line',
+            step: 'end',
+            data: stepStats.map(s => [s.date, s.dp_neg_2]),
+            itemStyle: { color: 'rgba(248, 113, 113, 1)' },
+            lineStyle: { width: 1 },
+            areaStyle: { origin: 'start', color: 'rgba(248, 113, 113, 0.25)' },
+            symbol: 'none'
+          },
+          {
+            name: 'Anomalia Extrema (-)',
+            type: 'line',
+            step: 'end',
+            data: stepStats.map(s => [s.date, s.dp_neg_3]),
+            itemStyle: { color: 'rgba(239, 68, 68, 1)' },
+            lineStyle: { width: 1 },
+            areaStyle: { origin: 'start', color: 'rgba(239, 68, 68, 0.25)' },
+            symbol: 'none'
+          },
+          {
+            name: 'Média Histórica',
+            type: 'line',
+            data: extendedStats.map(s => [s.date, s.media]),
+            itemStyle: { color: '#9CA3AF' },
+            lineStyle: { type: 'dashed', width: 2 },
+            symbol: 'none'
+          },
+          {
+            name: 'Ano Corrente (2026)',
+            type: 'line',
+            data: data2026,
+            itemStyle: { color: '#0ea5e9' },
+            lineStyle: { width: 3 },
+            symbol: 'circle',
+            symbolSize: 4
+          }
+        ]
+      };
+      
+      myChart.setOption(option);
+      
+      window.addEventListener('resize', function() {
+        myChart.resize();
+      });
+    }
+
+    window.onload = loadData;
+  </script>
+</body>
+</html>

@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 import Papa from 'papaparse';
-
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../services/firebase';
 interface EstatisticaChartProps {
   name: string;
   code: string;
@@ -40,107 +41,84 @@ const EstatisticaChart: React.FC<EstatisticaChartProps> = ({ name, code, river, 
     const fetchData = async () => {
       try {
         setLoading(true);
-        const histPath = csvPath.replace('estatisticas.csv', 'serie_historica.csv');
+        const snapshot = await getDocs(collection(db, `stations/${code}/yearly_readings`));
         
-        const [statsResponse, histResponse] = await Promise.all([
-          fetch(csvPath),
-          fetch(histPath).catch(() => null)
-        ]);
-
-        if (!statsResponse.ok) throw new Error('Network response was not ok');
-        const statsText = await statsResponse.text();
-
-        Papa.parse(statsText, {
-          header: true,
-          skipEmptyLines: true,
-          complete: (results) => {
-            const parsedStats: AnomalyStat[] = results.data
-              .filter((row: any) => row['MesNome'])
-              .map((row: any) => ({
-                monthName: row['MesNome'],
-                media: parseFloat(row['Media']),
-                desvio_padrao: parseFloat(row['DesvioPadrao']),
-                dp_pos_1: parseFloat(row['DP_Pos_1']),
-                dp_pos_1_5: parseFloat(row['DP_Pos_1_5']),
-                dp_pos_2: parseFloat(row['DP_Pos_2']),
-                dp_pos_3: parseFloat(row['DP_Pos_3']),
-                dp_neg_1: parseFloat(row['DP_Neg_1']),
-                dp_neg_1_5: parseFloat(row['DP_Neg_1_5']),
-                dp_neg_2: parseFloat(row['DP_Neg_2']),
-                dp_neg_3: parseFloat(row['DP_Neg_3']),
-              }));
-            setStats(parsedStats);
-          },
-          error: () => {
-            setError(true);
-            setLoading(false);
+        const dataByYear: Record<string, [string, number | null][]> = {};
+        const allReadings: Record<string, number[]> = {};
+        
+        snapshot.forEach(doc => {
+          const year = doc.id;
+          const readings = doc.data().readings || {};
+          
+          dataByYear[year] = [];
+          
+          const daysInMonths = [31,29,31,30,31,30,31,31,30,31,30,31];
+          let lastValidCota = null;
+          
+          for(let m=1; m<=12; m++) {
+            const mStr = String(m).padStart(2, '0');
+            for(let d=1; d<=daysInMonths[m-1]; d++) {
+               const dStr = String(d).padStart(2, '0');
+               const md = `${mStr}-${dStr}`;
+               const val = readings[md];
+               
+               if (val !== undefined && val !== null) {
+                 dataByYear[year].push([`2024-${md}`, val]);
+                 lastValidCota = val;
+                 
+                 const periodKey = d <= 15 ? `${mStr}-1` : `${mStr}-2`;
+                 if (!allReadings[periodKey]) allReadings[periodKey] = [];
+                 allReadings[periodKey].push(val);
+               } else {
+                 if (dataByYear[year].length > 0 && lastValidCota !== null) {
+                   dataByYear[year].push([`2024-${md}`, null]);
+                 }
+               }
+            }
           }
         });
 
-        if (histResponse && histResponse.ok) {
-           const histText = await histResponse.text();
-           Papa.parse(histText, {
-              header: true,
-              skipEmptyLines: true,
-              complete: (results) => {
-                 const dataByYear: Record<string, [string, number | null][]> = {};
-                 let lastDateByYear: Record<string, Date> = {};
-
-                 results.data.forEach((row: any) => {
-                    const dateStr = row['Data'];
-                    if (dateStr) {
-                      const cotaStr = row['Cota'];
-                      const currDateParts = dateStr.split(/[-/]/);
-                      let currDate: Date;
-                      if (currDateParts[0].length === 4) {
-                        currDate = new Date(parseInt(currDateParts[0]), parseInt(currDateParts[1]) - 1, parseInt(currDateParts[2]));
-                      } else {
-                        currDate = new Date(parseInt(currDateParts[2]), parseInt(currDateParts[1]) - 1, parseInt(currDateParts[0]));
-                      }
-                      
-                      const yearStr = currDate.getFullYear().toString();
-                      const mappedDateStr = `2024-${String(currDate.getMonth() + 1).padStart(2, '0')}-${String(currDate.getDate()).padStart(2, '0')}`;
-                      
-                      if (!dataByYear[yearStr]) {
-                        dataByYear[yearStr] = [];
-                      }
-                      
-                      const lastDate = lastDateByYear[yearStr];
-                      if (lastDate) {
-                        const diffDays = Math.round((currDate.getTime() - lastDate.getTime()) / (1000 * 3600 * 24));
-                        if (diffDays === 0) {
-                          const cota = parseFloat(cotaStr);
-                          if (!isNaN(cota)) {
-                            dataByYear[yearStr][dataByYear[yearStr].length - 1][1] = cota;
-                          }
-                          return;
-                        } else if (diffDays > 1) {
-                          const missingDate = new Date(lastDate.getTime() + 24 * 3600 * 1000);
-                          const missingMapped = `2024-${String(missingDate.getMonth() + 1).padStart(2, '0')}-${String(missingDate.getDate()).padStart(2, '0')}`;
-                          dataByYear[yearStr].push([missingMapped, null]);
-                        }
-                      }
-                      
-                      const cota = parseFloat(cotaStr);
-                      if (!isNaN(cota)) {
-                        dataByYear[yearStr].push([mappedDateStr, cota]);
-                        lastDateByYear[yearStr] = currDate;
-                      }
-                    }
-                 });
-
-                 setGroupedData(dataByYear);
-                 const years = Object.keys(dataByYear).sort((a, b) => parseInt(b) - parseInt(a));
-                 setAvailableYears(years);
-                 if (years.length > 0) {
-                   setSelectedYears([years[0]]);
-                 }
-                 setLoading(false);
-              }
-           });
-        } else {
-           setLoading(false);
+        const computedStats: AnomalyStat[] = [];
+        const monthNames = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+        
+        for (let m=1; m<=12; m++) {
+          const mStr = String(m).padStart(2, '0');
+          for (let part=1; part<=2; part++) {
+             const periodKey = `${mStr}-${part}`;
+             const vals = allReadings[periodKey] || [];
+             if (vals.length === 0) continue;
+             
+             const sum = vals.reduce((a,b)=>a+b, 0);
+             const mean = sum / vals.length;
+             let varSum = 0;
+             for (const v of vals) varSum += Math.pow(v - mean, 2);
+             const stdDev = Math.sqrt(varSum / vals.length);
+             
+             computedStats.push({
+                monthName: `${part === 1 ? '1ª' : '2ª'} Q. ${monthNames[m-1]}`,
+                media: mean,
+                desvio_padrao: stdDev,
+                dp_pos_1: mean + stdDev,
+                dp_pos_1_5: mean + 1.5 * stdDev,
+                dp_pos_2: mean + 2 * stdDev,
+                dp_pos_3: mean + 3 * stdDev,
+                dp_neg_1: mean - stdDev,
+                dp_neg_1_5: mean - 1.5 * stdDev,
+                dp_neg_2: mean - 2 * stdDev,
+                dp_neg_3: mean - 3 * stdDev,
+                date: `2024-${mStr}-${part === 1 ? '08' : '23'}`
+             });
+          }
         }
+
+        setStats(computedStats);
+        setGroupedData(dataByYear);
+        const years = Object.keys(dataByYear).sort((a, b) => parseInt(b) - parseInt(a));
+        setAvailableYears(years);
+        if (years.length > 0) {
+          setSelectedYears([years[0]]);
+        }
+        setLoading(false);
       } catch (err) {
         console.error(err);
         setError(true);
@@ -157,15 +135,12 @@ const EstatisticaChart: React.FC<EstatisticaChartProps> = ({ name, code, river, 
     const xAxisData = stats.map(s => s.monthName);
 
     let extendedStats: AnomalyStat[] = [];
-    if (stats.length === 12) {
+    if (stats.length === 24) {
        extendedStats.push({ ...stats[0], date: '2024-01-01' });
-       stats.forEach((s, i) => {
-          const mm = String(i + 1).padStart(2, '0');
-          extendedStats.push({ ...s, date: `2024-${mm}-15` });
-       });
-       extendedStats.push({ ...stats[11], date: '2024-12-31' });
+       stats.forEach(s => extendedStats.push(s));
+       extendedStats.push({ ...stats[23], date: '2024-12-31' });
     } else {
-       extendedStats = stats.map((s, i) => ({ ...s, date: `2024-${String(i+1).padStart(2,'0')}-15` }));
+       extendedStats = stats;
     }
 
     const baseConfig = {

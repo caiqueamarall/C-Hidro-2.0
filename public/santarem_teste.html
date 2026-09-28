@@ -2,7 +2,7 @@
 <html lang="pt-BR">
 <head>
   <meta charset="UTF-8">
-  <title>Santarém - Gráfico de Anomalias (A partir de 2005)</title>
+  <title>Santarém - Gráfico de Anomalias (A partir de 1990)</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.2/papaparse.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
   <style>
@@ -15,7 +15,7 @@
 </head>
 <body>
   <h1>Santarém</h1>
-  <h3>Rio Tapajós • Código: 17900000 (Série iniciada em 2005)</h3>
+  <h3>Rio Tapajós • Código: 17900000 (Série iniciada em 1990)</h3>
   
   <p id="status" style="font-weight: bold; color: #d32f2f;">Carregando dados e desenhando o gráfico...</p>
   
@@ -61,7 +61,7 @@
               d = parts[0]; m = parts[1]; y = parts[2];
             }
             
-            if (parseInt(y) >= 2005) {
+            if (parseInt(y) >= 1990) {
               const dtStr = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
               if (!dailyData[dtStr]) dailyData[dtStr] = [];
               dailyData[dtStr].push(cota);

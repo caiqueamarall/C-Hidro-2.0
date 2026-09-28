@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 import Papa from 'papaparse';
-
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../services/firebase';
 interface StationChartProps {
   name: string;
   code: string;
@@ -29,70 +30,48 @@ const StationChart: React.FC<StationChartProps> = ({ name, code, river, csvPath,
     const fetchData = async () => {
       try {
         setLoading(true);
-        const response = await fetch(csvPath);
-        if (!response.ok) {
-          throw new Error('Network response was not ok');
-        }
-        const text = await response.text();
-
-        Papa.parse(text, {
-          header: true,
-          skipEmptyLines: true,
-          complete: (results) => {
-            const parsedData: [string, number | null][] = [];
-            let lastDate: Date | null = null;
-
-            results.data.forEach((row: any) => {
-              const dateStr = row['Data'];
-              const cotaStr = row['Cota'];
-
-              if (dateStr) {
-                // PapaParse gives DD/MM/YYYY or YYYY-MM-DD depending on your CSV.
-                // Assuming it's already sortable or we parse it correctly. 
-                // Let's create a Date object to check gaps.
-                const currDateParts = dateStr.split('/');
-                let currDate: Date;
-                if (currDateParts.length === 3) {
-                  // DD/MM/YYYY format
-                  currDate = new Date(parseInt(currDateParts[2]), parseInt(currDateParts[1]) - 1, parseInt(currDateParts[0]));
-                } else {
-                  // Fallback for YYYY-MM-DD or standard parse
-                  currDate = new Date(dateStr);
-                }
-
-                if (lastDate) {
-                  const diffDays = Math.round((currDate.getTime() - lastDate.getTime()) / (1000 * 3600 * 24));
-
-                  if (diffDays === 0) {
-                    // Duplicate date! Update the last point instead of pushing a new one.
-                    // This prevents the 'lttb' sampling algorithm from generating criss-crossing lines.
-                    const cota = parseFloat(cotaStr);
-                    if (!isNaN(cota)) {
-                      parsedData[parsedData.length - 1][1] = cota;
+        const snapshot = await getDocs(collection(db, `stations/${code}/yearly_readings`));
+        
+        const parsedData: [string, number | null][] = [];
+        let lastDate: Date | null = null;
+        
+        const years: { year: string; readings: any }[] = [];
+        snapshot.forEach(doc => years.push({ year: doc.id, readings: doc.data().readings || {} }));
+        years.sort((a,b) => parseInt(a.year) - parseInt(b.year));
+        
+        const daysInMonths = [31,29,31,30,31,30,31,31,30,31,30,31];
+        
+        years.forEach(yearData => {
+           const y = parseInt(yearData.year);
+           for (let m=1; m<=12; m++) {
+              const mStr = String(m).padStart(2, '0');
+              const days = (m===2 && y%4!==0) ? 28 : daysInMonths[m-1];
+              
+              for (let d=1; d<=days; d++) {
+                 const dStr = String(d).padStart(2, '0');
+                 const md = `${mStr}-${dStr}`;
+                 const val = yearData.readings[md];
+                 
+                 const currDate = new Date(y, m-1, d);
+                 const dateStr = `${y}-${mStr}-${dStr}`;
+                 
+                 if (val !== undefined && val !== null) {
+                    if (lastDate) {
+                       const diffDays = Math.round((currDate.getTime() - lastDate.getTime()) / (1000 * 3600 * 24));
+                       if (diffDays > 1) {
+                         const missingDate = new Date(lastDate.getTime() + 24 * 3600 * 1000);
+                         parsedData.push([missingDate.toISOString().split('T')[0], null]);
+                       }
                     }
-                    return; // Skip to next row
-                  } else if (diffDays > 1) {
-                    // There's a gap! Insert a null point to break the line
-                    const missingDate = new Date(lastDate.getTime() + 24 * 3600 * 1000);
-                    parsedData.push([missingDate.toISOString().split('T')[0], null]);
-                  }
-                }
-
-                const cota = parseFloat(cotaStr);
-                if (!isNaN(cota)) {
-                  parsedData.push([dateStr, cota]);
-                  lastDate = currDate;
-                }
+                    parsedData.push([dateStr, val]);
+                    lastDate = currDate;
+                 }
               }
-            });
-            setData(parsedData as [string, number][]);
-            setLoading(false);
-          },
-          error: () => {
-            setError(true);
-            setLoading(false);
-          }
+           }
         });
+        
+        setData(parsedData);
+        setLoading(false);
       } catch (err) {
         console.error(err);
         setError(true);

@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
 import Papa from 'papaparse';
-
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../services/firebase';
 interface AnualChartProps {
   name: string;
   code: string;
@@ -21,83 +22,46 @@ const AnualChart: React.FC<AnualChartProps> = ({ name, code, river, csvPath }) =
     const fetchData = async () => {
       try {
         setLoading(true);
-        const response = await fetch(csvPath);
-        if (!response.ok) {
-          throw new Error('Network response was not ok');
-        }
-        const text = await response.text();
+        const snapshot = await getDocs(collection(db, `stations/${code}/yearly_readings`));
+        const dataByYear: Record<string, [string, number | null][]> = {};
         
-        Papa.parse(text, {
-          header: true,
-          skipEmptyLines: true,
-          complete: (results) => {
-            const dataByYear: Record<string, [string, number | null][]> = {};
-            let lastDateByYear: Record<string, Date> = {};
-
-            results.data.forEach((row: any) => {
-              const dateStr = row['Data'];
-              const cotaStr = row['Cota'];
-              
-              if (dateStr) {
-                const currDateParts = dateStr.split('/');
-                let currDate: Date;
-                if (currDateParts.length === 3) {
-                  currDate = new Date(parseInt(currDateParts[2]), parseInt(currDateParts[1]) - 1, parseInt(currDateParts[0]));
-                } else {
-                  currDate = new Date(dateStr);
-                }
-
-                const yearStr = currDate.getFullYear().toString();
-                
-                // Map the date to a leap year (2024) to ensure Feb 29 is supported
-                const mappedDateStr = `2024-${String(currDate.getMonth() + 1).padStart(2, '0')}-${String(currDate.getDate()).padStart(2, '0')}`;
-
-                if (!dataByYear[yearStr]) {
-                  dataByYear[yearStr] = [];
-                }
-
-                const lastDate = lastDateByYear[yearStr];
-                if (lastDate) {
-                  const diffDays = Math.round((currDate.getTime() - lastDate.getTime()) / (1000 * 3600 * 24));
-                  if (diffDays === 0) {
-                    // Deduplicate identical dates
-                    const cota = parseFloat(cotaStr);
-                    if (!isNaN(cota)) {
-                      dataByYear[yearStr][dataByYear[yearStr].length - 1][1] = cota;
+        snapshot.forEach(doc => {
+           const year = doc.id;
+           const readings = doc.data().readings || {};
+           
+           dataByYear[year] = [];
+           const daysInMonths = [31,29,31,30,31,30,31,31,30,31,30,31];
+           let lastValidCota = null;
+           
+           for(let m=1; m<=12; m++) {
+              const mStr = String(m).padStart(2, '0');
+              for(let d=1; d<=daysInMonths[m-1]; d++) {
+                 const dStr = String(d).padStart(2, '0');
+                 const md = `${mStr}-${dStr}`;
+                 const val = readings[md];
+                 
+                 if (val !== undefined && val !== null) {
+                    dataByYear[year].push([`2024-${md}`, val]);
+                    lastValidCota = val;
+                 } else {
+                    if (dataByYear[year].length > 0 && lastValidCota !== null) {
+                       dataByYear[year].push([`2024-${md}`, null]);
                     }
-                    return;
-                  } else if (diffDays > 1) {
-                    // Handle gaps by inserting a null point in the mapped timeline
-                    const missingDate = new Date(lastDate.getTime() + 24 * 3600 * 1000);
-                    const missingMapped = `2024-${String(missingDate.getMonth() + 1).padStart(2, '0')}-${String(missingDate.getDate()).padStart(2, '0')}`;
-                    dataByYear[yearStr].push([missingMapped, null]);
-                  }
-                }
-
-                const cota = parseFloat(cotaStr);
-                if (!isNaN(cota)) {
-                  dataByYear[yearStr].push([mappedDateStr, cota]);
-                  lastDateByYear[yearStr] = currDate;
-                }
+                 }
               }
-            });
-            
-            setGroupedData(dataByYear);
-            const years = Object.keys(dataByYear).sort((a, b) => parseInt(b) - parseInt(a)); // Descending
-            setAvailableYears(years);
-            
-            // Select the most recent year by default
-            if (years.length > 0) {
-              setSelectedYears([years[0]]);
-            }
-            
-            setLoading(false);
-          },
-          error: () => {
-            setError(true);
-            setLoading(false);
-          }
+           }
         });
+        
+        setGroupedData(dataByYear);
+        const years = Object.keys(dataByYear).sort((a, b) => parseInt(b) - parseInt(a)); // Descending
+        setAvailableYears(years);
+        
+        // Select the most recent year by default
+        if (years.length > 0) {
+          setSelectedYears([years[0]]);
+        }
+        
+        setLoading(false);
       } catch (err) {
         console.error(err);
         setError(true);

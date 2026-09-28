@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import Papa from 'papaparse';
-
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../services/firebase';
 const stations = [
   { name: 'Óbidos', code: '17050001', river: 'Rio Amazonas' },
   { name: 'Almeirim', code: '18390000', river: 'Rio Amazonas' },
@@ -64,104 +65,44 @@ const ComparativosTab: React.FC = () => {
 
       await Promise.all(stations.map(async (station) => {
         try {
-          const csvPath = `/Rios/${station.river}/${station.name} (${station.code})/serie_historica.csv`;
-          const statPath = `/Rios/${station.river}/${station.name} (${station.code})/estatisticas.csv`;
+          const snapshot = await getDocs(collection(db, `stations/${station.code}/yearly_readings`));
           
-          const [response, statResponse] = await Promise.all([
-            fetch(csvPath),
-            fetch(statPath).catch(() => null)
-          ]);
+          const valuesByYear: Record<string, number> = {};
+          const targetDayValues: number[] = [];
+          const monthValuesList: number[] = [];
           
-          if (!response.ok) throw new Error('File not found');
-          const text = await response.text();
+          snapshot.forEach(doc => {
+             const year = doc.id;
+             const readings = doc.data().readings || {};
+             
+             const val = readings[targetMMDD];
+             if (val !== undefined && val !== null) {
+               targetDayValues.push(val);
+               if (targetYears.includes(year)) {
+                 valuesByYear[year] = val;
+               }
+             }
+             
+             Object.keys(readings).forEach(md => {
+               if (md.startsWith(targetMonth + '-')) {
+                 const v = readings[md];
+                 if (v !== undefined && v !== null) {
+                   monthValuesList.push(v);
+                 }
+               }
+             });
+          });
           
           let estatisticasMedia: number | null = null;
           let estatisticasSD = 0;
-          if (statResponse && statResponse.ok) {
-            const statText = await statResponse.text();
-            Papa.parse(statText, {
-              header: true,
-              skipEmptyLines: true,
-              complete: (res) => {
-                const stats = res.data;
-                const m = parseInt(targetMonth);
-                const d = parseInt(targetDay);
-                
-                let prevM = m;
-                let nextM = m;
-                let weightNext = 0;
-                
-                if (d === 15) {
-                   prevM = m; nextM = m; weightNext = 0;
-                } else if (d > 15) {
-                   prevM = m;
-                   nextM = m === 12 ? 1 : m + 1;
-                   const daysInMonth = new Date(2024, m, 0).getDate();
-                   weightNext = (d - 15) / daysInMonth;
-                } else {
-                   prevM = m === 1 ? 12 : m - 1;
-                   nextM = m;
-                   const daysInPrevMonth = new Date(2024, prevM, 0).getDate();
-                   weightNext = ((daysInPrevMonth - 15) + d) / daysInPrevMonth;
-                }
-                
-                const rowPrev = stats.find((r: any) => parseInt(r['MesNum']) === prevM);
-                const rowNext = stats.find((r: any) => parseInt(r['MesNum']) === nextM);
-                
-                if (rowPrev && rowNext) {
-                   const mediaPrev = parseFloat(rowPrev['Media']);
-                   const sdPrev = parseFloat(rowPrev['DesvioPadrao']);
-                   const mediaNext = parseFloat(rowNext['Media']);
-                   const sdNext = parseFloat(rowNext['DesvioPadrao']);
-                   
-                   estatisticasMedia = mediaPrev * (1 - weightNext) + mediaNext * weightNext;
-                   estatisticasSD = sdPrev * (1 - weightNext) + sdNext * weightNext;
-                } else {
-                  const row = stats.find((r: any) => parseInt(r['MesNum']) === m);
-                  if (row) {
-                    estatisticasMedia = parseFloat(row['Media']);
-                    estatisticasSD = parseFloat(row['DesvioPadrao']);
-                  }
-                }
-              }
-            });
-          }
-
-          const valuesByYear: Record<string, number[]> = {};
-          const monthValuesList: number[] = [];
           
-          Papa.parse(text, {
-            header: true,
-            skipEmptyLines: true,
-            complete: (results) => {
-              results.data.forEach((row: any) => {
-                const dateStr = row['Data']; 
-                const cotaStr = row['Cota'];
-                if (dateStr && cotaStr !== null && cotaStr !== '') {
-                  const cota = parseFloat(cotaStr);
-                  if (!isNaN(cota)) {
-                    let y = '', m = '', d = '';
-                    const dParts = dateStr.split(/[-/]/);
-                    if (dParts[0].length === 4) {
-                       y = dParts[0]; m = dParts[1]; d = dParts[2];
-                    } else {
-                       d = dParts[0]; m = dParts[1]; y = dParts[2];
-                    }
-                    m = m.padStart(2, '0');
-                    d = d.padStart(2, '0');
-                    
-                    if (`${m}-${d}` === targetMMDD && targetYears.includes(y)) {
-                      if (!valuesByYear[y]) valuesByYear[y] = [];
-                      valuesByYear[y].push(cota);
-                    }
-                    if (m === targetMonth) {
-                      monthValuesList.push(cota);
-                    }
-                  }
-                }
-              });
-            }
-          });
+          if (targetDayValues.length > 0) {
+             const sum = targetDayValues.reduce((a,b)=>a+b, 0);
+             estatisticasMedia = sum / targetDayValues.length;
+             let varSum = 0;
+             for (const v of targetDayValues) varSum += Math.pow(v - estatisticasMedia, 2);
+             estatisticasSD = Math.sqrt(varSum / targetDayValues.length);
+          }
           
           const rowData: Record<string, number | null> = {};
           let maxVal = -Infinity;
@@ -170,11 +111,11 @@ const ComparativosTab: React.FC = () => {
           let minY: string | null = null;
 
           targetYears.forEach(y => {
-            if (valuesByYear[y] && valuesByYear[y].length > 0) {
-              const avg = valuesByYear[y].reduce((a,b) => a+b, 0) / valuesByYear[y].length;
-              rowData[y] = avg;
-              if (avg > maxVal) { maxVal = avg; maxY = y; }
-              if (avg < minVal) { minVal = avg; minY = y; }
+            if (valuesByYear[y] !== undefined) {
+              const val = valuesByYear[y];
+              rowData[y] = val;
+              if (val > maxVal) { maxVal = val; maxY = y; }
+              if (val < minVal) { minVal = val; minY = y; }
             } else {
               rowData[y] = null;
             }

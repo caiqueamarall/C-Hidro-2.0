@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import { useState } from 'react';
 import { Activity, LayoutDashboard, Settings, BarChart2, Calendar } from 'lucide-react';
 import './App.css';
 import SerieHistoricaTab from './components/SerieHistoricaTab';

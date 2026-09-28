@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
-import Papa from 'papaparse';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../services/firebase';
 interface AnualChartProps {

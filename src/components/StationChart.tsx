@@ -1,6 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import ReactECharts from 'echarts-for-react';
-import Papa from 'papaparse';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../services/firebase';
 interface StationChartProps {
@@ -12,7 +11,7 @@ interface StationChartProps {
 }
 
 const StationChart: React.FC<StationChartProps> = ({ name, code, river, csvPath, defaultColor }) => {
-  const [data, setData] = useState<[string, number][]>([]);
+  const [data, setData] = useState<[string, number | null][]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
 

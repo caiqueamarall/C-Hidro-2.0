@@ -1,5 +1,4 @@
 import React, { useEffect, useState } from 'react';
-import Papa from 'papaparse';
 import { collection, getDocs } from 'firebase/firestore';
 import { db } from '../services/firebase';
 const stations = [

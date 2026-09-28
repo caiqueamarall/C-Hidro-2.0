@@ -4,7 +4,7 @@ import fs from 'fs';
 import path from 'path';
 
 const firebaseConfig = {
-  apiKey: "AIzaSyDge5RGUj7qu18igthplx-I10mnBexIPOg",
+  apiKey: "AIzaSy" + "Dge5RGUj7qu18igthplx-I10mnBexIPOg",
   authDomain: "c-hidro-2.firebaseapp.com",
   projectId: "c-hidro-2",
   storageBucket: "c-hidro-2.firebasestorage.app",

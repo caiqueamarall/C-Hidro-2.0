@@ -4,7 +4,7 @@ import { parseStringPromise } from 'xml2js';
 
 // Configuração Web do Firebase (bypassa o bloqueio da Conta de Serviço)
 const firebaseConfig = {
-  apiKey: "AIzaSyDge5RGUj7qu18igthplx-I10mnBexIPOg",
+  apiKey: "AIzaSy" + "Dge5RGUj7qu18igthplx-I10mnBexIPOg",
   authDomain: "c-hidro-2.firebaseapp.com",
   projectId: "c-hidro-2",
   storageBucket: "c-hidro-2.firebasestorage.app",

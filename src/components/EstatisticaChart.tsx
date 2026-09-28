@@ -65,7 +65,7 @@ const EstatisticaChart: React.FC<EstatisticaChartProps> = ({ name, code, river, 
                  dataByYear[year].push([`2024-${md}`, val]);
                  lastValidCota = val;
                  
-                 const periodKey = d <= 15 ? `${mStr}-1` : `${mStr}-2`;
+                 const periodKey = `${mStr}`;
                  if (!allReadings[periodKey]) allReadings[periodKey] = [];
                  allReadings[periodKey].push(val);
                } else {
@@ -82,32 +82,30 @@ const EstatisticaChart: React.FC<EstatisticaChartProps> = ({ name, code, river, 
         
         for (let m=1; m<=12; m++) {
           const mStr = String(m).padStart(2, '0');
-          for (let part=1; part<=2; part++) {
-             const periodKey = `${mStr}-${part}`;
-             const vals = allReadings[periodKey] || [];
-             if (vals.length === 0) continue;
-             
-             const sum = vals.reduce((a,b)=>a+b, 0);
-             const mean = sum / vals.length;
-             let varSum = 0;
-             for (const v of vals) varSum += Math.pow(v - mean, 2);
-             const stdDev = Math.sqrt(varSum / vals.length);
-             
-             computedStats.push({
-                monthName: `${part === 1 ? '1ª' : '2ª'} Q. ${monthNames[m-1]}`,
-                media: mean,
-                desvio_padrao: stdDev,
-                dp_pos_1: mean + stdDev,
-                dp_pos_1_5: mean + 1.5 * stdDev,
-                dp_pos_2: mean + 2 * stdDev,
-                dp_pos_3: mean + 3 * stdDev,
-                dp_neg_1: mean - stdDev,
-                dp_neg_1_5: mean - 1.5 * stdDev,
-                dp_neg_2: mean - 2 * stdDev,
-                dp_neg_3: mean - 3 * stdDev,
-                date: `2024-${mStr}-${part === 1 ? '08' : '23'}`
-             });
-          }
+          const periodKey = `${mStr}`;
+          const vals = allReadings[periodKey] || [];
+          if (vals.length === 0) continue;
+          
+          const sum = vals.reduce((a,b)=>a+b, 0);
+          const mean = sum / vals.length;
+          let varSum = 0;
+          for (const v of vals) varSum += Math.pow(v - mean, 2);
+          const stdDev = Math.sqrt(varSum / vals.length);
+          
+          computedStats.push({
+             monthName: monthNames[m-1],
+             media: mean,
+             desvio_padrao: stdDev,
+             dp_pos_1: mean + stdDev,
+             dp_pos_1_5: mean + 1.5 * stdDev,
+             dp_pos_2: mean + 2 * stdDev,
+             dp_pos_3: mean + 3 * stdDev,
+             dp_neg_1: mean - stdDev,
+             dp_neg_1_5: mean - 1.5 * stdDev,
+             dp_neg_2: mean - 2 * stdDev,
+             dp_neg_3: mean - 3 * stdDev,
+             date: `2024-${mStr}-15`
+          });
         }
 
         setStats(computedStats);
@@ -134,10 +132,10 @@ const EstatisticaChart: React.FC<EstatisticaChartProps> = ({ name, code, river, 
     const xAxisData = stats.map(s => s.monthName);
 
     let extendedStats: AnomalyStat[] = [];
-    if (stats.length === 24) {
+    if (stats.length === 12) {
        extendedStats.push({ ...stats[0], date: '2024-01-01' });
        stats.forEach(s => extendedStats.push(s));
-       extendedStats.push({ ...stats[23], date: '2024-12-31' });
+       extendedStats.push({ ...stats[11], date: '2024-12-31' });
     } else {
        extendedStats = stats;
     }

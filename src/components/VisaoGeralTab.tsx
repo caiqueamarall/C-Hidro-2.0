@@ -207,7 +207,7 @@ export default function VisaoGeralTab() {
       })
       .catch(console.error);
 
-    fetch(`/estacoes.json`, {
+    fetch('estacoes.json', {
       cache: 'no-store',
       headers: { 'Cache-Control': 'no-cache' }
     })
@@ -459,7 +459,7 @@ export default function VisaoGeralTab() {
             <MapResizer />
 
           {/* KMZ Overlay */}
-          <KmzOverlay url={'/Com4DN.kmz'} />
+          <KmzOverlay url={'Com4DN.kmz'} />
 
           {/* Render All Stations Only for Niveis */}
           {(['niveis_com4_principais', 'niveis_com4', 'niveis_amazonia'].includes(activeProduct)) && estacoes.filter(estacao => {

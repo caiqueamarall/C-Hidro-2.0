@@ -62,7 +62,7 @@ const EstatisticaChart: React.FC<EstatisticaChartProps> = ({ name, code, river, 
                const val = readings[md];
                
                if (val !== undefined && val !== null) {
-                 dataByYear[year].push([`2024-${md}`, val]);
+                 dataByYear[year].push([md, val]);
                  lastValidCota = val;
                  
                  const periodKey = `${mStr}`;
@@ -70,7 +70,7 @@ const EstatisticaChart: React.FC<EstatisticaChartProps> = ({ name, code, river, 
                  allReadings[periodKey].push(val);
                } else {
                  if (dataByYear[year].length > 0 && lastValidCota !== null) {
-                   dataByYear[year].push([`2024-${md}`, null]);
+                   dataByYear[year].push([md, null]);
                  }
                }
             }
@@ -104,7 +104,7 @@ const EstatisticaChart: React.FC<EstatisticaChartProps> = ({ name, code, river, 
              dp_neg_1_5: mean - 1.5 * stdDev,
              dp_neg_2: mean - 2 * stdDev,
              dp_neg_3: mean - 3 * stdDev,
-             date: `2024-${mStr}-15`
+             date: `${mStr}-15`
           });
         }
 
@@ -133,9 +133,27 @@ const EstatisticaChart: React.FC<EstatisticaChartProps> = ({ name, code, river, 
 
     let extendedStats: AnomalyStat[] = [];
     if (stats.length === 12) {
-       extendedStats.push({ ...stats[0], date: '2024-01-01' });
+       const interpolate = (s1: AnomalyStat, s2: AnomalyStat, fraction: number, date: string): AnomalyStat => {
+         return {
+           monthName: '',
+           media: s1.media + (s2.media - s1.media) * fraction,
+           desvio_padrao: s1.desvio_padrao + (s2.desvio_padrao - s1.desvio_padrao) * fraction,
+           dp_pos_1: s1.dp_pos_1 + (s2.dp_pos_1 - s1.dp_pos_1) * fraction,
+           dp_pos_1_5: s1.dp_pos_1_5 + (s2.dp_pos_1_5 - s1.dp_pos_1_5) * fraction,
+           dp_pos_2: s1.dp_pos_2 + (s2.dp_pos_2 - s1.dp_pos_2) * fraction,
+           dp_pos_3: s1.dp_pos_3 + (s2.dp_pos_3 - s1.dp_pos_3) * fraction,
+           dp_neg_1: s1.dp_neg_1 + (s2.dp_neg_1 - s1.dp_neg_1) * fraction,
+           dp_neg_1_5: s1.dp_neg_1_5 + (s2.dp_neg_1_5 - s1.dp_neg_1_5) * fraction,
+           dp_neg_2: s1.dp_neg_2 + (s2.dp_neg_2 - s1.dp_neg_2) * fraction,
+           dp_neg_3: s1.dp_neg_3 + (s2.dp_neg_3 - s1.dp_neg_3) * fraction,
+           date
+         };
+       };
+       // Dec 15 to Jan 15 is 31 days. Jan 1 is 17 days after Dec 15.
+       extendedStats.push(interpolate(stats[11], stats[0], 17 / 31, '01-01'));
        stats.forEach(s => extendedStats.push(s));
-       extendedStats.push({ ...stats[11], date: '2024-12-31' });
+       // Dec 31 is 16 days after Dec 15.
+       extendedStats.push(interpolate(stats[11], stats[0], 16 / 31, '12-31'));
     } else {
        extendedStats = stats;
     }
@@ -296,45 +314,63 @@ const EstatisticaChart: React.FC<EstatisticaChartProps> = ({ name, code, river, 
       return {
         ...baseConfig,
         xAxis: {
-          type: 'time',
-          min: '2024-01-01',
-          max: '2024-12-31',
+          type: 'category',
+          data: (function() {
+            const days = [];
+            const dim = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+            for (let m = 1; m <= 12; m++) {
+              for (let d = 1; d <= dim[m - 1]; d++) {
+                days.push(`${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+              }
+            }
+            return days;
+          })(),
           axisLine: { lineStyle: { color: '#CBD5E1' } },
           splitLine: { show: false },
-          axisLabel: { 
-            color: '#64748B',
-            formatter: function (value: number) {
-              const date = new Date(value);
-              const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-              return months[date.getUTCMonth()];
+          axisTick: {
+            alignWithLabel: true,
+            interval: function (_index: number, value: string) {
+              return value.endsWith('-01') || value === '12-31';
             }
           },
-          splitNumber: 12,
-          minInterval: 3600 * 24 * 1000 * 28,
-          maxInterval: 3600 * 24 * 1000 * 32
+          axisLabel: { 
+            color: '#64748B',
+            interval: function (_index: number, value: string) {
+              return value.endsWith('-15');
+            },
+            formatter: function (value: string) {
+              const m = parseInt(value.split('-')[0], 10);
+              const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+              return months[m - 1];
+            }
+          }
         },
         tooltip: {
           trigger: 'axis',
           formatter: function (params: any) {
-            let html = `<div style="font-weight:bold;margin-bottom:8px;border-bottom:1px solid #ccc;padding-bottom:4px;">${params[0].axisValueLabel || 'Data'}</div>`;
+            const dateParts = params[0].axisValueLabel ? params[0].axisValueLabel.split('-') : ['01', '01'];
+            const monthDay = `${dateParts[1]}/${dateParts[0]}`;
+            let html = `<div style="font-weight:bold;margin-bottom:8px;border-bottom:1px solid #ccc;padding-bottom:4px;">${monthDay}</div>`;
             html += `<div style="color:var(--text-main);font-size:0.85rem;line-height:1.6">`;
             
             selectedYears.forEach(year => {
                const name = year === currentYearStr ? `Ano Corrente (${year})` : `Ano ${year}`;
                const yearParam = params.find((p: any) => p.seriesName === name);
-               if (yearParam) {
+               if (yearParam && yearParam.value && yearParam.value[1] != null) {
                   html += `<span style="color:${yearParam.color};font-weight:800;font-size:0.95rem;display:block;margin-bottom:4px">${name}: ${yearParam.value[1].toFixed(1)} cm</span>`;
                }
             });
 
             params.forEach((p: any) => {
                if (!selectedNames.includes(p.seriesName) && p.seriesName !== 'Média Histórica') {
-                   html += `<div><span style="color:${p.color};font-weight:600">${p.seriesName}:</span> ${p.value[1].toFixed(1)} cm</div>`;
+                   if (p.value && p.value[1] != null) {
+                       html += `<div><span style="color:${p.color};font-weight:600">${p.seriesName}:</span> ${p.value[1].toFixed(1)} cm</div>`;
+                   }
                }
             });
             
             const mediaParam = params.find((p: any) => p.seriesName === 'Média Histórica');
-            if (mediaParam) {
+            if (mediaParam && mediaParam.value && mediaParam.value[1] != null) {
                html += `<div style="color:#9CA3AF;font-weight:800;margin-top:4px">Média Histórica: ${mediaParam.value[1].toFixed(1)} cm</div>`;
             }
             

@@ -49,8 +49,9 @@ function getAnomalyTheme(value: number, mean: number, sd: number) {
 
 const ComparativosTab: React.FC = () => {
   const [subTab, setSubTab] = useState<'tabela' | 'resumo'>('resumo');
-  const [targetDay, setTargetDay] = useState('28');
-  const [targetMonth, setTargetMonth] = useState('09');
+  const today = new Date();
+  const [targetDay, setTargetDay] = useState(String(today.getDate()).padStart(2, '0'));
+  const [targetMonth, setTargetMonth] = useState(String(today.getMonth() + 1).padStart(2, '0'));
   const [tableData, setTableData] = useState<TableRowData[]>([]);
   const [loading, setLoading] = useState(false);
 
@@ -140,6 +141,11 @@ const ComparativosTab: React.FC = () => {
           let anomaly = { text: 'Sem dados', bg: '#f9fafb', fg: '#9ca3af' };
           if (currentLevel !== null && estatisticasMedia !== null) {
              anomaly = getAnomalyTheme(currentLevel, estatisticasMedia, estatisticasSD);
+          }
+          
+          // Máscara para Tucuruí: forçar como "Sem anomalia"
+          if (station.name === 'Tucuruí') {
+             anomaly = { text: 'Sem anomalia', bg: '#f8fafc', fg: '#475569' };
           }
 
           newTableData.push({
@@ -258,25 +264,26 @@ const ComparativosTab: React.FC = () => {
       </div>
 
       {subTab === 'resumo' ? (
-        <div style={{ marginTop: '16px', background: '#fff', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)' }}>
-          {loading ? (
-             <div className="loading-state" style={{ padding: '60px' }}>Carregando dados das estações...</div>
-          ) : (
-            <>
-              <div style={{ backgroundColor: '#f1f8e9', padding: '8px', textAlign: 'center', borderBottom: '2px solid #fff' }}>
-                <h2 style={{ color: '#1b5e20', margin: 0, fontSize: '1.1rem' }}>Resumo - {currentMonthName}{lastYear}</h2>
-              </div>
-              <div style={{ overflowX: 'auto' }}>
-                <table style={{ width: '100%', minWidth: '800px', borderCollapse: 'collapse', tableLayout: 'fixed' }}>
-                  <thead>
-                    <tr style={{ backgroundColor: '#1b5e20', color: '#fff' }}>
-                      <th style={{ padding: '8px', borderRight: '1px solid #fff', width: '20%' }}>Rios</th>
-                      <th style={{ padding: '8px', borderRight: '1px solid #fff', width: '40%' }}>Estação</th>
-                      <th style={{ padding: '8px', width: '40%' }}>
-                        Nível do Rio (m)<br/>
-                        <span style={{ fontSize: '0.7rem', fontWeight: 'normal' }}>MIN {'<'} MÉDIA {'<'} MÁX ({currentMonthName})</span>
-                      </th>
-                    </tr>
+        <div style={{ display: 'flex', justifyContent: 'center' }}>
+          <div style={{ marginTop: '16px', background: '#fff', borderRadius: '8px', overflow: 'hidden', boxShadow: '0 4px 6px -1px rgba(0,0,0,0.1)', width: '100%', maxWidth: '800px' }}>
+            {loading ? (
+               <div className="loading-state" style={{ padding: '60px' }}>Carregando dados das estações...</div>
+            ) : (
+              <>
+                <div style={{ backgroundColor: '#e8f5e9', padding: '16px', textAlign: 'center', borderBottom: '2px solid #1b5e20' }}>
+                  <h2 style={{ color: '#1b5e20', margin: 0, fontSize: '1.2rem', fontWeight: 'bold' }}>Resumo de Níveis Com4ºDN - {currentMonthName}{lastYear}</h2>
+                </div>
+                <div style={{ overflowX: 'auto' }}>
+                  <table style={{ width: '100%', minWidth: '600px', borderCollapse: 'collapse', tableLayout: 'auto' }}>
+                    <thead>
+                      <tr style={{ backgroundColor: '#1b5e20', color: '#fff' }}>
+                        <th style={{ padding: '8px 10px', borderRight: '1px solid #fff', width: '25%' }}>Rios</th>
+                        <th style={{ padding: '8px 10px', borderRight: '1px solid #fff', width: '45%' }}>Estação</th>
+                        <th style={{ padding: '8px 10px', width: '30%' }}>
+                          Nível do Rio (m)<br/>
+                          <span style={{ fontSize: '0.7rem', fontWeight: 'normal' }}>MIN {'<'} MÉDIA {'<'} MÁX ({currentMonthName})</span>
+                        </th>
+                      </tr>
                   </thead>
                   <tbody>
                     {Object.entries(groupedByRiver).map(([river, rows]) => (
@@ -319,6 +326,7 @@ const ComparativosTab: React.FC = () => {
               </div>
             </>
           )}
+          </div>
         </div>
       ) : (
         <div className="comparativos-container" style={{ marginTop: '24px', background: 'var(--bg-panel)', borderRadius: '12px', border: '1px solid var(--border-color)', overflow: 'hidden' }}>
@@ -329,10 +337,10 @@ const ComparativosTab: React.FC = () => {
               <table className="estatisticas-table" style={{ width: '100%', minWidth: '800px' }}>
                 <thead>
                   <tr>
-                    <th style={{ padding: '16px 20px', fontSize: '0.95rem', color: 'var(--text-main)' }}>Rio</th>
-                    <th style={{ padding: '16px 20px', fontSize: '0.95rem' }}>Estação</th>
+                    <th style={{ padding: '8px 12px', fontSize: '0.9rem', color: 'var(--text-main)' }}>Rio</th>
+                    <th style={{ padding: '8px 12px', fontSize: '0.9rem' }}>Estação</th>
                     {targetYears.map(year => (
-                      <th key={year} style={{ padding: '16px 20px', fontSize: '0.95rem', textAlign: 'center' }}>
+                      <th key={year} style={{ padding: '8px 12px', fontSize: '0.9rem', textAlign: 'center' }}>
                         {year}
                       </th>
                     ))}
@@ -360,7 +368,7 @@ const ComparativosTab: React.FC = () => {
                           <td 
                             rowSpan={riverRowSpan} 
                             style={{ 
-                              padding: '16px 20px', 
+                              padding: '8px 12px', 
                               color: 'var(--text-main)', 
                               borderBottom: '1px solid var(--border-color)',
                               verticalAlign: 'middle',
@@ -371,9 +379,9 @@ const ComparativosTab: React.FC = () => {
                             {row.station.river}
                           </td>
                         )}
-                        <td style={{ padding: '16px 20px', fontWeight: 600, borderBottom: '1px solid var(--border-color)' }}>
+                        <td style={{ padding: '8px 12px', fontWeight: 600, borderBottom: '1px solid var(--border-color)' }}>
                           {row.station.name}
-                          <div style={{ fontSize: '0.75rem', color: 'var(--text-main)', marginTop: '4px', fontWeight: 'normal' }}>Cod: {row.station.code}</div>
+                          <div style={{ fontSize: '0.75rem', color: 'var(--text-main)', marginTop: '2px', fontWeight: 'normal' }}>Cod: {row.station.code}</div>
                         </td>
                       {targetYears.map(year => {
                         const val = row.data[year];
@@ -397,7 +405,7 @@ const ComparativosTab: React.FC = () => {
                           <td 
                             key={year} 
                             style={{ 
-                              padding: '16px 20px', 
+                              padding: '8px 12px', 
                               textAlign: 'center', 
                               borderBottom: '1px solid var(--border-color)',
                               backgroundColor: bgColor,

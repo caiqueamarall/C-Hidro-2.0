@@ -139,22 +139,26 @@
     }
     
     function drawChart(stats, data2026) {
-      // Create stepped points: place each month's value at the 1st of the month
-      const stepStats = [];
-      for (let i = 0; i < 12; i++) {
-        const mm = String(i + 1).padStart(2, '0');
-        stepStats.push({ ...stats[i], date: `2024-${mm}-01` });
-      }
-      stepStats.push({ ...stats[11], date: '2024-12-31' });
-
-      // Create extended points for the smooth average curve (15th of month)
       const extendedStats = [];
-      extendedStats.push({ ...stats[0], date: '2024-01-01' });
+      const interpolate = (s1, s2, fraction, date) => ({
+         media: s1.media + (s2.media - s1.media) * fraction,
+         dp_pos_1: s1.dp_pos_1 + (s2.dp_pos_1 - s1.dp_pos_1) * fraction,
+         dp_pos_1_5: s1.dp_pos_1_5 + (s2.dp_pos_1_5 - s1.dp_pos_1_5) * fraction,
+         dp_pos_2: s1.dp_pos_2 + (s2.dp_pos_2 - s1.dp_pos_2) * fraction,
+         dp_pos_3: s1.dp_pos_3 + (s2.dp_pos_3 - s1.dp_pos_3) * fraction,
+         dp_neg_1: s1.dp_neg_1 + (s2.dp_neg_1 - s1.dp_neg_1) * fraction,
+         dp_neg_1_5: s1.dp_neg_1_5 + (s2.dp_neg_1_5 - s1.dp_neg_1_5) * fraction,
+         dp_neg_2: s1.dp_neg_2 + (s2.dp_neg_2 - s1.dp_neg_2) * fraction,
+         dp_neg_3: s1.dp_neg_3 + (s2.dp_neg_3 - s1.dp_neg_3) * fraction,
+         date
+      });
+
+      extendedStats.push(interpolate(stats[11], stats[0], 17 / 31, '2024-01-01'));
       for (let i = 0; i < 12; i++) {
         const mm = String(i + 1).padStart(2, '0');
         extendedStats.push({ ...stats[i], date: `2024-${mm}-15` });
       }
-      extendedStats.push({ ...stats[11], date: '2024-12-31' });
+      extendedStats.push(interpolate(stats[11], stats[0], 16 / 31, '2024-12-31'));
 
       const chartDom = document.getElementById('chartContainer');
       const myChart = echarts.init(chartDom);
@@ -202,6 +206,7 @@
           data: [
             'Ano Corrente (2026)',
             'Média Histórica', 
+            'Desvios Padrões',
             'Anomalia Extrema (+)', 'Anomalia Severa (+)', 'Anomalia Moderada (+)', 'Anomalia Leve (+)',
             'Anomalia Leve (-)', 'Anomalia Moderada (-)', 'Anomalia Severa (-)', 'Anomalia Extrema (-)'
           ],
@@ -230,8 +235,7 @@
           {
             name: 'Anomalia Leve (+)',
             type: 'line',
-            step: 'end',
-            data: stepStats.map(s => [s.date, s.dp_pos_1]),
+            data: extendedStats.map(s => [s.date, s.dp_pos_1]),
             itemStyle: { color: 'rgba(186, 230, 253, 1)' },
             lineStyle: { width: 1 },
             areaStyle: { origin: 'end', color: 'rgba(186, 230, 253, 0.25)' },
@@ -240,8 +244,7 @@
           {
             name: 'Anomalia Moderada (+)',
             type: 'line',
-            step: 'end',
-            data: stepStats.map(s => [s.date, s.dp_pos_1_5]),
+            data: extendedStats.map(s => [s.date, s.dp_pos_1_5]),
             itemStyle: { color: 'rgba(125, 211, 252, 1)' },
             lineStyle: { width: 1 },
             areaStyle: { origin: 'end', color: 'rgba(125, 211, 252, 0.25)' },
@@ -250,8 +253,7 @@
           {
             name: 'Anomalia Severa (+)',
             type: 'line',
-            step: 'end',
-            data: stepStats.map(s => [s.date, s.dp_pos_2]),
+            data: extendedStats.map(s => [s.date, s.dp_pos_2]),
             itemStyle: { color: 'rgba(56, 189, 248, 1)' },
             lineStyle: { width: 1 },
             areaStyle: { origin: 'end', color: 'rgba(56, 189, 248, 0.25)' },
@@ -260,8 +262,7 @@
           {
             name: 'Anomalia Extrema (+)',
             type: 'line',
-            step: 'end',
-            data: stepStats.map(s => [s.date, s.dp_pos_3]),
+            data: extendedStats.map(s => [s.date, s.dp_pos_3]),
             itemStyle: { color: 'rgba(2, 132, 199, 1)' },
             lineStyle: { width: 1 },
             areaStyle: { origin: 'end', color: 'rgba(2, 132, 199, 0.25)' },
@@ -270,8 +271,7 @@
           {
             name: 'Anomalia Leve (-)',
             type: 'line',
-            step: 'end',
-            data: stepStats.map(s => [s.date, s.dp_neg_1]),
+            data: extendedStats.map(s => [s.date, s.dp_neg_1]),
             itemStyle: { color: 'rgba(254, 202, 202, 1)' },
             lineStyle: { width: 1 },
             areaStyle: { origin: 'start', color: 'rgba(254, 202, 202, 0.25)' },
@@ -280,8 +280,7 @@
           {
             name: 'Anomalia Moderada (-)',
             type: 'line',
-            step: 'end',
-            data: stepStats.map(s => [s.date, s.dp_neg_1_5]),
+            data: extendedStats.map(s => [s.date, s.dp_neg_1_5]),
             itemStyle: { color: 'rgba(252, 165, 165, 1)' },
             lineStyle: { width: 1 },
             areaStyle: { origin: 'start', color: 'rgba(252, 165, 165, 0.25)' },
@@ -290,8 +289,7 @@
           {
             name: 'Anomalia Severa (-)',
             type: 'line',
-            step: 'end',
-            data: stepStats.map(s => [s.date, s.dp_neg_2]),
+            data: extendedStats.map(s => [s.date, s.dp_neg_2]),
             itemStyle: { color: 'rgba(248, 113, 113, 1)' },
             lineStyle: { width: 1 },
             areaStyle: { origin: 'start', color: 'rgba(248, 113, 113, 0.25)' },
@@ -300,8 +298,7 @@
           {
             name: 'Anomalia Extrema (-)',
             type: 'line',
-            step: 'end',
-            data: stepStats.map(s => [s.date, s.dp_neg_3]),
+            data: extendedStats.map(s => [s.date, s.dp_neg_3]),
             itemStyle: { color: 'rgba(239, 68, 68, 1)' },
             lineStyle: { width: 1 },
             areaStyle: { origin: 'start', color: 'rgba(239, 68, 68, 0.25)' },
@@ -313,7 +310,72 @@
             data: extendedStats.map(s => [s.date, s.media]),
             itemStyle: { color: '#9CA3AF' },
             lineStyle: { type: 'dashed', width: 2 },
-            symbol: 'none'
+            symbol: 'circle',
+            symbolSize: 6,
+            z: 10
+          },
+          {
+            name: 'Desvios Padrões',
+            type: 'custom',
+            data: extendedStats.map(s => [
+              s.date,
+              s.media,
+              s.dp_pos_1,
+              s.dp_pos_1_5,
+              s.dp_pos_2,
+              s.dp_pos_3,
+              s.dp_neg_1,
+              s.dp_neg_1_5,
+              s.dp_neg_2,
+              s.dp_neg_3
+            ]),
+            renderItem: function (params, api) {
+              const xValue = api.value(0);
+              const media = api.coord([xValue, api.value(1)]);
+              const p1 = api.coord([xValue, api.value(2)]);
+              const p15 = api.coord([xValue, api.value(3)]);
+              const p2 = api.coord([xValue, api.value(4)]);
+              const p3 = api.coord([xValue, api.value(5)]);
+              const n1 = api.coord([xValue, api.value(6)]);
+              const n15 = api.coord([xValue, api.value(7)]);
+              const n2 = api.coord([xValue, api.value(8)]);
+              const n3 = api.coord([xValue, api.value(9)]);
+              
+              const halfWidth = 6;
+              const createTick = (coord) => ({
+                type: 'line',
+                shape: {
+                  x1: coord[0] - halfWidth,
+                  y1: coord[1],
+                  x2: coord[0] + halfWidth,
+                  y2: coord[1]
+                },
+                style: { stroke: '#475569', lineWidth: 2 }
+              });
+
+              return {
+                type: 'group',
+                children: [
+                  {
+                    type: 'line',
+                    shape: {
+                      x1: p3[0], y1: p3[1],
+                      x2: n3[0], y2: n3[1]
+                    },
+                    style: { stroke: '#475569', lineWidth: 2 }
+                  },
+                  createTick(p1),
+                  createTick(p15),
+                  createTick(p2),
+                  createTick(p3),
+                  createTick(n1),
+                  createTick(n15),
+                  createTick(n2),
+                  createTick(n3)
+                ]
+              };
+            },
+            z: 9
           },
           {
             name: 'Ano Corrente (2026)',
@@ -322,7 +384,8 @@
             itemStyle: { color: '#0ea5e9' },
             lineStyle: { width: 3 },
             symbol: 'circle',
-            symbolSize: 4
+            symbolSize: 4,
+            z: 20
           }
         ]
       };

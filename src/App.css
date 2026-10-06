@@ -15,6 +15,28 @@
   padding: 24px 0;
   box-shadow: 4px 0 24px rgba(0,0,0,0.2);
   z-index: 10;
+  transition: width 0.3s ease;
+}
+
+.sidebar.collapsed {
+  width: 80px;
+}
+
+.sidebar.collapsed .sidebar-title span {
+  display: none;
+}
+
+.sidebar.collapsed .nav-item {
+  justify-content: center;
+  padding: 12px 0;
+}
+
+.sidebar.collapsed .nav-item svg {
+  margin-right: 0;
+}
+
+.sidebar.collapsed .nav-item span {
+  display: none;
 }
 
 .sidebar-header {

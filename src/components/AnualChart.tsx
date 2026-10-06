@@ -40,11 +40,11 @@ const AnualChart: React.FC<AnualChartProps> = ({ name, code, river, csvPath }) =
                  const val = readings[md];
                  
                  if (val !== undefined && val !== null) {
-                    dataByYear[year].push([`2024-${md}`, val]);
+                    dataByYear[year].push([md, val]);
                     lastValidCota = val;
                  } else {
                     if (dataByYear[year].length > 0 && lastValidCota !== null) {
-                       dataByYear[year].push([`2024-${md}`, null]);
+                       dataByYear[year].push([md, null]);
                     }
                  }
               }
@@ -101,19 +101,21 @@ const AnualChart: React.FC<AnualChartProps> = ({ name, code, river, csvPath }) =
         textStyle: { color: '#0F172A' },
         formatter: function (params: any) {
           if (!params || params.length === 0) return '';
-          // params[0].value[0] is the mapped date '2024-MM-DD'
+          // params[0].value[0] is the mapped date 'MM-DD'
           const dateParts = params[0].value[0].split('-');
-          const monthDay = `${dateParts[2]}/${dateParts[1]}`; // DD/MM
+          const monthDay = `${dateParts[1]}/${dateParts[0]}`; // DD/MM
           
           let html = `<div style="font-weight:bold;margin-bottom:8px;">${monthDay}</div>`;
           params.forEach((item: any) => {
-            html += `
-              <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
-                <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background-color:${item.color};"></span>
-                <span style="color:#64748B;">${item.seriesName}:</span>
-                <span style="font-weight:600;">${item.value[1]} cm</span>
-              </div>
-            `;
+            if (item.value && item.value[1] != null) {
+              html += `
+                <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;">
+                  <span style="display:inline-block;width:10px;height:10px;border-radius:50%;background-color:${item.color};"></span>
+                  <span style="color:#64748B;">${item.seriesName}:</span>
+                  <span style="font-weight:600;">${item.value[1]} cm</span>
+                </div>
+              `;
+            }
           });
           return html;
         }
@@ -133,23 +135,36 @@ const AnualChart: React.FC<AnualChartProps> = ({ name, code, river, csvPath }) =
         containLabel: true
       },
       xAxis: {
-        type: 'time',
-        min: '2024-01-01',
-        max: '2024-12-31',
+        type: 'category',
+        data: (function() {
+          const days = [];
+          const dim = [31, 29, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+          for (let m = 1; m <= 12; m++) {
+            for (let d = 1; d <= dim[m - 1]; d++) {
+              days.push(`${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`);
+            }
+          }
+          return days;
+        })(),
         axisLine: { lineStyle: { color: '#CBD5E1' } },
         splitLine: { show: false },
-        axisLabel: { 
-          color: '#64748B',
-          formatter: function (value: number) {
-            const date = new Date(value);
-            // new Date("2024-01-01") is parsed as UTC, so we use getUTCMonth()
-            const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-            return months[date.getUTCMonth()];
+        axisTick: {
+          alignWithLabel: true,
+          interval: function (_index: number, value: string) {
+            return value.endsWith('-01') || value === '12-31';
           }
         },
-        splitNumber: 12,
-        minInterval: 3600 * 24 * 1000 * 28, // approx 1 month
-        maxInterval: 3600 * 24 * 1000 * 32  // approx 1 month
+        axisLabel: { 
+          color: '#64748B',
+          interval: function (_index: number, value: string) {
+            return value.endsWith('-15');
+          },
+          formatter: function (value: string) {
+            const m = parseInt(value.split('-')[0], 10);
+            const months = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+            return months[m - 1];
+          }
+        }
       },
       yAxis: {
         type: 'value',

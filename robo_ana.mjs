@@ -46,6 +46,8 @@ async function fetchTelemetry(codigo, startDate, endDate) {
         const response = await fetch(url);
         if (response.ok) {
             return await response.text();
+        } else {
+            console.error(`  ANA API retornou erro ${response.status} para ${codigo}`);
         }
     } catch (e) {
         console.error(`  Erro na requisição: ${e.message}`);
@@ -57,7 +59,7 @@ async function parseTelemetry(xmlText) {
     const dataPoints = {};
     try {
         const result = await parseStringPromise(xmlText);
-        const rows = result.DataTable?.diffgram?.[0]?.DocumentElement?.[0]?.DadosHidrometereologicos || [];
+        const rows = result.DataTable?.['diffgr:diffgram']?.[0]?.DocumentElement?.[0]?.DadosHidrometereologicos || [];
         
         for (const row of rows) {
             const dh = row.DataHora?.[0];

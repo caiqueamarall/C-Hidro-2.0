@@ -22,5 +22,24 @@ jobs:
     - name: Instalar dependências
       run: npm install firebase xml2js
 
-    - name: Executar Robô de Atualização
+    - name: Executar Robô de Atualização (Firebase)
       run: node robo_ana.mjs
+
+    - name: Baixar Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+        
+    - name: Instalar dependências Python
+      run: pip install requests
+        
+    - name: Executar Robô Sipam -> estacoes.json
+      run: python robo_censipam.py
+      
+    - name: Commit e Push das alterações
+      run: |
+        git config --global user.name 'Robô ANA'
+        git config --global user.email 'caiqueamarall@users.noreply.github.com'
+        git add public/estacoes.json
+        git commit -m "🤖 Atualização Automática de Dados (Sipam + ANA)" || echo "Sem mudanças"
+        git push

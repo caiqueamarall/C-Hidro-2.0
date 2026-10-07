@@ -61,3 +61,7 @@ body {
   margin: 0;
   width: auto !important;
 }
+
+.leaflet-popup-close-button {
+  display: none !important;
+}

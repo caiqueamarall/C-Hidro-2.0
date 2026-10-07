@@ -2,8 +2,8 @@ name: Robô Atualizador da ANA
 
 on:
   schedule:
-    # Roda todos os dias às 08:00 (Horário de Brasília -> 11:00 UTC)
-    - cron: '0 11 * * *'
+    # Roda duas vezes ao dia: às 05:00 e 17:00 (Horário de Brasília -> 08:00 e 20:00 UTC)
+    - cron: '0 8,20 * * *'
   workflow_dispatch: # Permite rodar o script manualmente clicando num botão
 
 jobs:

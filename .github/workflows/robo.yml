@@ -38,6 +38,9 @@ jobs:
     - name: Executar Robô Sipam -> estacoes.json
       run: python robo_censipam.py
       
+    - name: Executar Robô ANA Telemetria -> estacoes.json
+      run: node robo_estacoes_ana.mjs
+      
     - name: Commit e Push das alterações
       run: |
         git config --global user.name 'Robô ANA'

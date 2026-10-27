@@ -207,9 +207,13 @@ export default function VisaoGeralTab() {
       })
       .catch(console.error);
 
-    fetch('estacoes.json', {
+    fetch(`estacoes.json?t=${Date.now()}`, {
       cache: 'no-store',
-      headers: { 'Cache-Control': 'no-cache' }
+      headers: {
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      }
     })
       .then(res => res.json())
       .then(data => {

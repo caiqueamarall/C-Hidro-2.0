@@ -6,10 +6,10 @@ interface AnualChartProps {
   name: string;
   code: string;
   river: string;
-  csvPath: string;
+  csvPath?: string;
 }
 
-const AnualChart: React.FC<AnualChartProps> = ({ name, code, river, csvPath }) => {
+const AnualChart: React.FC<AnualChartProps> = ({ name, code, river }) => {
   // groupedData: Record<Year, Array<[MappedDate, Cota]>>
   const [groupedData, setGroupedData] = useState<Record<string, [string, number | null][]>>({});
   const [availableYears, setAvailableYears] = useState<string[]>([]);
@@ -69,7 +69,7 @@ const AnualChart: React.FC<AnualChartProps> = ({ name, code, river, csvPath }) =
     };
 
     fetchData();
-  }, [csvPath]);
+  }, [code]);
 
   const toggleYear = (year: string) => {
     setSelectedYears(prev => 

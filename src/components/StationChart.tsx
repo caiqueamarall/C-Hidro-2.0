@@ -6,11 +6,11 @@ interface StationChartProps {
   name: string;
   code: string;
   river: string;
-  csvPath: string;
+  csvPath?: string;
   defaultColor: string;
 }
 
-const StationChart: React.FC<StationChartProps> = ({ name, code, river, csvPath, defaultColor }) => {
+const StationChart: React.FC<StationChartProps> = ({ name, code, river, defaultColor }) => {
   const [data, setData] = useState<[string, number | null][]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
@@ -79,7 +79,7 @@ const StationChart: React.FC<StationChartProps> = ({ name, code, river, csvPath,
     };
 
     fetchData();
-  }, [csvPath]);
+  }, [code]);
 
   const option = useMemo(() => {
     return {

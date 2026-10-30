@@ -106,12 +106,10 @@ async function updateStation(est) {
     const yesterday = new Date(today);
     yesterday.setDate(yesterday.getDate() - 1);
     
-    if (lastDate >= yesterday) {
-        console.log(`Estação ${est.nome} (${codigo}) já está atualizada.`);
-        return;
-    }
+    // Sempre busca a partir de lastDate (ou de ontem caso já tenhamos chegado em hoje) para atualizar com as medições mais recentes
+    const startDate = (lastDate < yesterday) ? lastDate : yesterday;
     
-    const xmlText = await fetchTelemetry(codigo, lastDate, today);
+    const xmlText = await fetchTelemetry(codigo, startDate, today);
     if (xmlText) {
         const chunkData = await parseTelemetry(xmlText);
         const updates = {};
